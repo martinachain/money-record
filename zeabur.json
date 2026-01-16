@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.zeabur.app/template.json",
+  "build": {
+    "build_command": "npm run build:all && npx prisma generate",
+    "output_dir": "dist"
+  },
+  "start": {
+    "command": "npx prisma migrate deploy && npm run start"
+  }
+}

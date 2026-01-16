@@ -1,0 +1,62 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 类别表
+model Category {
+  id        String   @id @default(cuid())
+  name      String   // 类别名称（如：餐饮、交通）
+  icon      String?  // 图标（可选）
+  type      String   // 类别类型：INCOME（收入）或 EXPENSE（支出）
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+  budgets      Budget[]
+
+  @@map("categories")
+}
+
+// 交易记录表
+model Transaction {
+  id        String   @id @default(cuid())
+  amount    Float    // 金额
+  type      String   // 收入 INCOME 或支出 EXPENSE
+  date      DateTime // 交易日期
+  note      String?  // 备注（可选）
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@index([date])
+  @@index([categoryId])
+  @@map("transactions")
+}
+
+// 预算表
+model Budget {
+  id        String   @id @default(cuid())
+  month     Int      // 月份 (1-12)
+  year      Int      // 年份
+  amount    Float    // 预算限额
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId, month, year]) // 每个类别每月只能有一个预算
+  @@index([year, month])
+  @@map("budgets")
+}
