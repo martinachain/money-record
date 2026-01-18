@@ -1,4 +1,4 @@
-const CACHE_NAME = 'money-record-v1';
+const CACHE_NAME = 'money-record-v2';
 const urlsToCache = [
   '/',
   '/index.html',
