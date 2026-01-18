@@ -23,7 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
-/src/generated/prisma
+# Prisma generated client (in node_modules)
 
 # Environment files
 .env
