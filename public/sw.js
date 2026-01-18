@@ -38,6 +38,16 @@ self.addEventListener('activate', (event) => {
 
 // 拦截网络请求
 self.addEventListener('fetch', (event) => {
+  // 跳过非 GET 请求（POST、PUT、DELETE 等不能被缓存）
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // 跳过 API 请求，不缓存
+  if (event.request.url.includes('/api/')) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
