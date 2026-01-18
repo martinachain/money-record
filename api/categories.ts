@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { prisma } from "./_db";
+import { prisma } from "./_db.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // 设置 CORS
