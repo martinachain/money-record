@@ -23,6 +23,8 @@ function App() {
   const [page, setPage] = useState<Page>("transactions");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showAllRecords, setShowAllRecords] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchTransactions = () => {
     fetch(`${API_BASE_URL}/api/transactions`)
@@ -36,9 +38,31 @@ function App() {
     setRefreshKey((k) => k + 1);
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm("确定要删除这条记录吗？")) {
+      return;
+    }
+    setDeletingId(id);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/transactions?id=${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        fetchTransactions();
+        setRefreshKey((k) => k + 1);
+      }
+    } catch (error) {
+      console.error("删除失败:", error);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   useEffect(() => {
     fetchTransactions();
   }, []);
+
+  const displayedRecords = showAllRecords ? transactions : transactions.slice(0, 5);
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -104,7 +128,7 @@ function App() {
                   </p>
                 ) : (
                   <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                    {transactions.map((tx) => (
+                    {transactions.slice(0, 5).map((tx) => (
                       <div
                         key={tx.id}
                         className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
@@ -141,6 +165,67 @@ function App() {
 
             {/* 预算看板 */}
             <BudgetDashboard key={refreshKey} />
+
+            {/* 所有记录 */}
+            {transactions.length > 0 && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-bold mb-4 text-gray-800">
+                  所有记录 ({transactions.length})
+                </h2>
+
+                <div className="space-y-3">
+                  {displayedRecords.map((tx) => (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition group"
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <span className="text-2xl">
+                          {tx.category.icon || "💰"}
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-800">
+                            {tx.category.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(tx.date).toLocaleDateString("zh-CN")}
+                            {tx.note && ` - ${tx.note}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`font-bold ${
+                            tx.type === "EXPENSE"
+                              ? "text-red-500"
+                              : "text-green-500"
+                          }`}
+                        >
+                          {tx.type === "EXPENSE" ? "-" : "+"}¥{tx.amount.toFixed(2)}
+                        </span>
+                        <button
+                          onClick={() => handleDelete(tx.id)}
+                          disabled={deletingId === tx.id}
+                          className="opacity-0 group-hover:opacity-100 px-2 py-1 text-red-500 hover:bg-red-50 rounded transition disabled:opacity-50"
+                          title="删除"
+                        >
+                          {deletingId === tx.id ? "..." : "删除"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {transactions.length > 5 && (
+                  <button
+                    onClick={() => setShowAllRecords(!showAllRecords)}
+                    className="w-full mt-4 py-2 text-blue-500 hover:bg-blue-50 rounded-lg transition"
+                  >
+                    {showAllRecords ? "收起" : `显示更多 (${transactions.length - 5} 条)`}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ) : page === "budget" ? (
           <BudgetSettings />
