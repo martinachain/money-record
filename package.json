@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "server": "tsx server/index.ts",
-    "build": "prisma generate && vite build",
+    "build": "vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "build:all": "npm run build && npm run build:server",
     "lint": "eslint .",
