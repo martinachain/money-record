@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 // 类别表
@@ -31,6 +31,7 @@ model Transaction {
   type      String   // 收入 INCOME 或支出 EXPENSE
   date      DateTime // 交易日期
   note      String?  // 备注（可选）
+  userId    String   // Clerk 用户 ID
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -39,6 +40,7 @@ model Transaction {
 
   @@index([date])
   @@index([categoryId])
+  @@index([userId])
   @@map("transactions")
 }
 
@@ -48,13 +50,15 @@ model Budget {
   month     Int      // 月份 (1-12)
   year      Int      // 年份
   amount    Float    // 预算限额
+  userId    String   // Clerk 用户 ID
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
-  @@unique([categoryId, month, year]) // 每个类别每月只能有一个预算
+  @@unique([userId, categoryId, month, year]) // 每个用户每个类别每月只能有一个预算
   @@index([year, month])
+  @@index([userId])
   @@map("budgets")
 }

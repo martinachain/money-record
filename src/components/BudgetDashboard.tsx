@@ -1,18 +1,20 @@
-import { useState, useEffect } from "react";
-import { API_BASE_URL } from "../config";
+import { useAuth } from "@clerk/clerk-react";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api.js";
+import type { Id } from "../../convex/_generated/dataModel.js";
 
 interface Category {
-  id: string;
+  _id: Id<"categories">;
   name: string;
-  icon: string | null;
+  icon?: string;
   type: string;
 }
 
 interface Budget {
-  id: string;
-  categoryId: string;
+  _id: Id<"budgets">;
+  categoryId: Id<"categories">;
   amount: number;
-  category: Category;
+  category: Category | null;
 }
 
 interface UsageData {
@@ -21,10 +23,7 @@ interface UsageData {
 }
 
 export function BudgetDashboard() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [budgets, setBudgets] = useState<Budget[]>([]);
-  const [usage, setUsage] = useState<UsageData[]>([]);
-
+  const { userId } = useAuth();
   const month = new Date().getMonth() + 1;
   const year = new Date().getFullYear();
 
@@ -33,27 +32,29 @@ export function BudgetDashboard() {
     "七月", "八月", "九月", "十月", "十一月", "十二月"
   ];
 
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/api/categories`)
-      .then((res) => res.json())
-      .then(setCategories);
-
-    fetch(`${API_BASE_URL}/api/budgets?month=${month}&year=${year}`)
-      .then((res) => res.json())
-      .then(setBudgets);
-
-    fetch(`${API_BASE_URL}/api/budgets/usage?month=${month}&year=${year}`)
-      .then((res) => res.json())
-      .then(setUsage);
-  }, []);
+  // 使用 Convex 查询数据
+  const categoriesData = useQuery(api.categories.list);
+  const categories = Array.isArray(categoriesData) ? categoriesData : [];
+  
+  const budgetsData = useQuery(
+    api.budgets.list,
+    userId ? { month, year, userId } : "skip"
+  );
+  const budgets = Array.isArray(budgetsData) ? budgetsData : [];
+  
+  const usageData = useQuery(
+    api.budgets.usage,
+    userId ? { month, year, userId } : "skip"
+  );
+  const usage = Array.isArray(usageData) ? usageData : [];
 
   const expenseCategories = categories.filter((c) => c.type === "EXPENSE");
 
-  const getBudgetForCategory = (categoryId: string) => {
+  const getBudgetForCategory = (categoryId: Id<"categories">) => {
     return budgets.find((b) => b.categoryId === categoryId);
   };
 
-  const getUsageForCategory = (categoryId: string) => {
+  const getUsageForCategory = (categoryId: Id<"categories">) => {
     const u = usage.find((u) => u.categoryId === categoryId);
     return u?._sum.amount || 0;
   };
@@ -65,7 +66,7 @@ export function BudgetDashboard() {
 
   // 只显示有预算的类别
   const categoriesWithBudget = expenseCategories.filter((c) =>
-    getBudgetForCategory(c.id)
+    getBudgetForCategory(c._id)
   );
 
   if (categoriesWithBudget.length === 0) {
@@ -117,18 +118,18 @@ export function BudgetDashboard() {
       {/* 分类预算列表 */}
       <div className="space-y-3">
         {categoriesWithBudget.map((category) => {
-          const budget = getBudgetForCategory(category.id);
-          const spent = getUsageForCategory(category.id);
+          const budget = getBudgetForCategory(category._id);
+          const spent = getUsageForCategory(category._id);
           const limit = budget?.amount || 0;
           const percentage = limit > 0 ? (spent / limit) * 100 : 0;
           const isWarning = percentage >= 80;
           const isOverBudget = percentage >= 100;
 
           return (
-            <div key={category.id} className="border rounded-lg p-3">
+            <div key={category._id} className="border rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">{category.icon}</span>
+                  <span className="text-lg">{category.icon || ""}</span>
                   <span className="font-medium text-gray-700">{category.name}</span>
                 </div>
                 <div className="text-right">

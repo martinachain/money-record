@@ -24,18 +24,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const endDate = new Date(date);
         endDate.setHours(23, 59, 59, 999);
 
-        const data = await prisma.transaction.aggregate({
-          where: {
-            type: "EXPENSE",
-            date: { gte: startDate, lte: endDate },
-          },
-          _sum: { amount: true },
-        });
+        const [expenseData, incomeData] = await Promise.all([
+          prisma.transaction.aggregate({
+            where: {
+              type: "EXPENSE",
+              date: { gte: startDate, lte: endDate },
+            },
+            _sum: { amount: true },
+          }),
+          prisma.transaction.aggregate({
+            where: {
+              type: "INCOME",
+              date: { gte: startDate, lte: endDate },
+            },
+            _sum: { amount: true },
+          }),
+        ]);
 
         results.push({
           month: `${date.getMonth() + 1}/${date.getDate()}`,
           year: date.getFullYear(),
-          amount: data._sum.amount || 0,
+          amount: expenseData._sum.amount || 0,
+          income: incomeData._sum.amount || 0,
         });
       }
     } else if (viewMode === "week") {
@@ -47,18 +57,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         weekEnd.setDate(weekStart.getDate() + 6);
         weekEnd.setHours(23, 59, 59, 999);
 
-        const data = await prisma.transaction.aggregate({
-          where: {
-            type: "EXPENSE",
-            date: { gte: weekStart, lte: weekEnd },
-          },
-          _sum: { amount: true },
-        });
+        const [expenseData, incomeData] = await Promise.all([
+          prisma.transaction.aggregate({
+            where: {
+              type: "EXPENSE",
+              date: { gte: weekStart, lte: weekEnd },
+            },
+            _sum: { amount: true },
+          }),
+          prisma.transaction.aggregate({
+            where: {
+              type: "INCOME",
+              date: { gte: weekStart, lte: weekEnd },
+            },
+            _sum: { amount: true },
+          }),
+        ]);
 
         results.push({
           month: `${weekStart.getMonth() + 1}/${weekStart.getDate()}周`,
           year: weekStart.getFullYear(),
-          amount: data._sum.amount || 0,
+          amount: expenseData._sum.amount || 0,
+          income: incomeData._sum.amount || 0,
         });
       }
     } else {
@@ -69,18 +89,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const startDate = new Date(year, month - 1, 1);
         const endDate = new Date(year, month, 0, 23, 59, 59);
 
-        const data = await prisma.transaction.aggregate({
-          where: {
-            type: "EXPENSE",
-            date: { gte: startDate, lte: endDate },
-          },
-          _sum: { amount: true },
-        });
+        const [expenseData, incomeData] = await Promise.all([
+          prisma.transaction.aggregate({
+            where: {
+              type: "EXPENSE",
+              date: { gte: startDate, lte: endDate },
+            },
+            _sum: { amount: true },
+          }),
+          prisma.transaction.aggregate({
+            where: {
+              type: "INCOME",
+              date: { gte: startDate, lte: endDate },
+            },
+            _sum: { amount: true },
+          }),
+        ]);
 
         results.push({
           month: `${month}月`,
           year,
-          amount: data._sum.amount || 0,
+          amount: expenseData._sum.amount || 0,
+          income: incomeData._sum.amount || 0,
         });
       }
     }

@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
-import { API_BASE_URL } from "../config";
+import { useAuth } from "@clerk/clerk-react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api.js";
+import type { Id } from "../../convex/_generated/dataModel.js";
 
 interface Category {
-  id: string;
+  _id: Id<"categories">;
   name: string;
-  icon: string | null;
+  icon?: string;
   type: string;
 }
 
@@ -15,11 +18,11 @@ interface TransactionFormProps {
 const ICONS = ["🍜", "🚗", "🛒", "🎮", "🏠", "💊", "📚", "💸", "🎬", "✈️", "👕", "💄", "🐱", "🎁", "📱", "💰", "💵", "📈"];
 
 export function TransactionForm({ onSuccess }: TransactionFormProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { userId } = useAuth();
   const [type, setType] = useState<"EXPENSE" | "INCOME">("EXPENSE");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [categoryId, setCategoryId] = useState("");
+  const [categoryId, setCategoryId] = useState<Id<"categories"> | "">("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -29,27 +32,18 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
   const [customName, setCustomName] = useState("");
   const [customIcon, setCustomIcon] = useState("💸");
 
-  const fetchCategories = () => {
-    fetch(`${API_BASE_URL}/api/categories`)
-      .then((res) => res.json())
-      .then((data) => {
-        setCategories(data);
-        const filtered = data.filter((c: Category) => c.type === type);
-        if (filtered.length > 0 && !categoryId) {
-          setCategoryId(filtered[0].id);
-        }
-      })
-      .catch(() => setError("加载类别失败"));
-  };
-
-  useEffect(() => {
-    fetchCategories();
-  }, []);
+  // 使用 Convex 查询类别
+  const categoriesData = useQuery(api.categories.list);
+  const categories = Array.isArray(categoriesData) ? categoriesData : [];
+  
+  // Convex mutations
+  const createCategory = useMutation(api.categories.create);
+  const createTransaction = useMutation(api.transactions.create);
 
   useEffect(() => {
     const filtered = categories.filter((c) => c.type === type);
-    if (filtered.length > 0 && !filtered.find((c) => c.id === categoryId)) {
-      setCategoryId(filtered[0].id);
+    if (filtered.length > 0 && (!categoryId || !filtered.find((c) => c._id === categoryId))) {
+      setCategoryId(filtered[0]._id);
     }
     setShowCustom(false);
   }, [type, categories]);
@@ -71,22 +65,17 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/categories`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: customName.trim(),
-          icon: customIcon,
-          type,
-        }),
+      const newCategory = await createCategory({
+        name: customName.trim(),
+        icon: customIcon,
+        type,
       });
-
-      const newCategory = await res.json();
-      setCategoryId(newCategory.id);
+      if (newCategory) {
+        setCategoryId(newCategory._id);
+      }
       setCustomName("");
       setCustomIcon("💸");
       setShowCustom(false);
-      fetchCategories();
     } catch {
       setError("添加类别失败");
     } finally {
@@ -96,7 +85,7 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!categoryId) {
+    if (!categoryId || !userId) {
       setError("请选择类别");
       return;
     }
@@ -104,19 +93,14 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/transactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: parseFloat(amount),
-          type,
-          date,
-          categoryId,
-          note: note || null,
-        }),
+      await createTransaction({
+        amount: parseFloat(amount),
+        type,
+        date,
+        categoryId: categoryId as Id<"categories">,
+        note: note || undefined,
+        userId,
       });
-
-      if (!res.ok) throw new Error("保存失败");
 
       setAmount("");
       setNote("");
@@ -204,8 +188,8 @@ export function TransactionForm({ onSuccess }: TransactionFormProps) {
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
           {filteredCategories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.icon} {cat.name}
+            <option key={cat._id} value={cat._id}>
+              {cat.icon || ""} {cat.name}
             </option>
           ))}
           <option value="__custom__">➕ 自定义类别...</option>

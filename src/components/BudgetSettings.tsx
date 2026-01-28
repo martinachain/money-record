@@ -1,36 +1,37 @@
 import { useState, useEffect } from "react";
-import { API_BASE_URL } from "../config";
+import { useAuth } from "@clerk/clerk-react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api.js";
+import type { Id } from "../../convex/_generated/dataModel.js";
 
 interface Category {
-  id: string;
+  _id: Id<"categories">;
   name: string;
-  icon: string | null;
+  icon?: string;
   type: string;
 }
 
 interface Budget {
-  id: string;
-  categoryId: string;
+  _id: Id<"budgets">;
+  categoryId: Id<"categories">;
   month: number;
   year: number;
   amount: number;
-  category: Category;
+  category: Category | null;
 }
 
 interface UsageData {
-  categoryId: string;
+  categoryId: Id<"categories"> | string;
   _sum: { amount: number | null };
 }
 
 const ICONS = ["🍜", "🚗", "🛒", "🎮", "🏠", "💊", "📚", "💸", "🎬", "✈️", "👕", "💄", "🐱", "🎁", "📱"];
 
 export function BudgetSettings() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [budgets, setBudgets] = useState<Budget[]>([]);
-  const [usage, setUsage] = useState<UsageData[]>([]);
+  const { userId } = useAuth();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<Id<"categories"> | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -39,66 +40,60 @@ export function BudgetSettings() {
   const [newName, setNewName] = useState("");
   const [newIcon, setNewIcon] = useState("💸");
 
+  // 使用 Convex 查询数据
+  const categoriesData = useQuery(api.categories.list);
+  const categories = Array.isArray(categoriesData) ? categoriesData : [];
+  
+  const budgetsData = useQuery(
+    api.budgets.list,
+    userId ? { month, year, userId } : "skip"
+  );
+  const budgets = Array.isArray(budgetsData) ? budgetsData : [];
+  
+  const usageData = useQuery(
+    api.budgets.usage,
+    userId ? { month, year, userId } : "skip"
+  );
+  const usage = Array.isArray(usageData) ? usageData : [];
+
   const expenseCategories = categories.filter((c) => c.type === "EXPENSE");
 
-  const fetchCategories = () => {
-    fetch(`${API_BASE_URL}/api/categories`)
-      .then((res) => res.json())
-      .then(setCategories);
-  };
+  // Convex mutations
+  const upsertBudget = useMutation(api.budgets.upsert);
+  const createCategory = useMutation(api.categories.create);
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  useEffect(() => {
-    fetchBudgets();
-    fetchUsage();
-  }, [month, year]);
-
-  const fetchBudgets = () => {
-    fetch(`${API_BASE_URL}/api/budgets?month=${month}&year=${year}`)
-      .then((res) => res.json())
-      .then(setBudgets);
-  };
-
-  const fetchUsage = () => {
-    fetch(`${API_BASE_URL}/api/budgets/usage?month=${month}&year=${year}`)
-      .then((res) => res.json())
-      .then(setUsage);
-  };
-
-  const getBudgetForCategory = (categoryId: string) => {
+  const getBudgetForCategory = (categoryId: Id<"categories">) => {
     return budgets.find((b) => b.categoryId === categoryId);
   };
 
-  const getUsageForCategory = (categoryId: string) => {
-    const u = usage.find((u) => u.categoryId === categoryId);
+  const getUsageForCategory = (categoryId: Id<"categories">) => {
+    const u = usage.find((u) => String(u.categoryId) === String(categoryId));
     return u?._sum.amount || 0;
   };
 
-  const handleSave = async (categoryId: string) => {
-    if (!editAmount) return;
+  const handleSave = async (categoryId: Id<"categories">) => {
+    if (!editAmount || !userId) return;
     setLoading(true);
 
-    await fetch(`${API_BASE_URL}/api/budgets`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      await upsertBudget({
         categoryId,
         month,
         year,
         amount: parseFloat(editAmount),
-      }),
-    });
+        userId,
+      });
 
-    setEditingId(null);
-    setEditAmount("");
-    fetchBudgets();
-    setLoading(false);
+      setEditingId(null);
+      setEditAmount("");
+    } catch (error) {
+      console.error("保存预算失败:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const startEdit = (categoryId: string) => {
+  const startEdit = (categoryId: Id<"categories">) => {
     const budget = getBudgetForCategory(categoryId);
     setEditingId(categoryId);
     setEditAmount(budget ? budget.amount.toString() : "");
@@ -108,21 +103,21 @@ export function BudgetSettings() {
     if (!newName.trim()) return;
     setLoading(true);
 
-    await fetch(`${API_BASE_URL}/api/categories`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      await createCategory({
         name: newName.trim(),
         icon: newIcon,
         type: "EXPENSE",
-      }),
-    });
+      });
 
-    setNewName("");
-    setNewIcon("💸");
-    setShowAddForm(false);
-    fetchCategories();
-    setLoading(false);
+      setNewName("");
+      setNewIcon("💸");
+      setShowAddForm(false);
+    } catch (error) {
+      console.error("添加类别失败:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const months = [
@@ -159,21 +154,21 @@ export function BudgetSettings() {
       {/* Budget List */}
       <div className="space-y-4">
         {expenseCategories.map((category) => {
-          const budget = getBudgetForCategory(category.id);
-          const spent = getUsageForCategory(category.id);
+          const budget = getBudgetForCategory(category._id);
+          const spent = getUsageForCategory(category._id);
           const limit = budget?.amount || 0;
           const percentage = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
           const isOverBudget = spent > limit && limit > 0;
 
           return (
-            <div key={category.id} className="border rounded-lg p-4">
+            <div key={category._id} className="border rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">{category.icon}</span>
+                  <span className="text-xl">{category.icon || "💸"}</span>
                   <span className="font-medium text-gray-800">{category.name}</span>
                 </div>
 
-                {editingId === category.id ? (
+                {editingId === category._id ? (
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -186,7 +181,7 @@ export function BudgetSettings() {
                       autoFocus
                     />
                     <button
-                      onClick={() => handleSave(category.id)}
+                      onClick={() => handleSave(category._id)}
                       disabled={loading}
                       className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
                     >
@@ -201,7 +196,7 @@ export function BudgetSettings() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => startEdit(category.id)}
+                    onClick={() => startEdit(category._id)}
                     className="px-3 py-1 text-blue-500 hover:bg-blue-50 rounded"
                   >
                     {budget ? `¥${limit.toFixed(2)}` : "设置预算"}

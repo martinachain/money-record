@@ -1,56 +1,65 @@
 import { useState, useEffect } from "react";
+import { useAuth, SignIn, UserButton, useClerk } from "@clerk/clerk-react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../convex/_generated/api.js";
 import { TransactionForm } from "./components/TransactionForm";
 import { BudgetSettings } from "./components/BudgetSettings";
 import { BudgetDashboard } from "./components/BudgetDashboard";
 import { Analytics } from "./components/Analytics";
-import { API_BASE_URL } from "./config";
-
-interface Transaction {
-  id: string;
-  amount: number;
-  type: string;
-  date: string;
-  note: string | null;
-  category: {
-    name: string;
-    icon: string | null;
-  };
-}
 
 type Page = "transactions" | "budget" | "analytics";
 
 function App() {
+  const { isSignedIn, userId } = useAuth();
+  const { signOut } = useClerk();
   const [page, setPage] = useState<Page>("transactions");
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [showAllRecords, setShowAllRecords] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchTransactions = () => {
-    fetch(`${API_BASE_URL}/api/transactions`)
-      .then((res) => res.json())
-      .then(setTransactions)
-      .catch(console.error);
+  // 查询类别列表
+  const categoriesData = useQuery(api.categories.list);
+  const categories = Array.isArray(categoriesData) ? categoriesData : [];
+  
+  // 初始化类别的 mutation
+  const initializeCategories = useMutation(api.seed.initializeCategories);
+
+  // 自动初始化类别（只在类别为空时执行一次）
+  useEffect(() => {
+    if (isSignedIn && categories.length === 0 && categoriesData !== undefined) {
+      // categoriesData 为 undefined 表示还在加载中，空数组表示已加载但没有数据
+      initializeCategories().catch((error) => {
+        console.error("初始化类别失败:", error);
+      });
+    }
+  }, [isSignedIn, categories.length, categoriesData, initializeCategories]);
+
+  const handleSignOut = async () => {
+    await signOut();
   };
 
+  // 使用 Convex 查询交易记录
+  const transactionsData = useQuery(
+    api.transactions.list,
+    isSignedIn && userId ? { userId } : "skip"
+  );
+  const transactions = Array.isArray(transactionsData) ? transactionsData : [];
+
+  // 删除交易记录的 mutation
+  const deleteTransaction = useMutation(api.transactions.remove);
+
   const handleTransactionSuccess = () => {
-    fetchTransactions();
-    setRefreshKey((k) => k + 1);
+    // Convex 会自动更新，不需要手动刷新
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("确定要删除这条记录吗？")) {
       return;
     }
+    if (!userId) return;
+    
     setDeletingId(id);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/transactions?id=${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        fetchTransactions();
-        setRefreshKey((k) => k + 1);
-      }
+      await deleteTransaction({ id: id as any, userId });
     } catch (error) {
       console.error("删除失败:", error);
     } finally {
@@ -58,11 +67,19 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    fetchTransactions();
-  }, []);
-
   const displayedRecords = showAllRecords ? transactions : transactions.slice(0, 5);
+
+  // 如果未登录，显示登录界面
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
+          <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">极简记账</h1>
+          <SignIn />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -71,7 +88,7 @@ function App() {
         <div className="max-w-4xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <h1 className="text-xl font-bold text-gray-800">极简记账</h1>
-            <div className="flex gap-1 sm:gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <button
                 onClick={() => setPage("transactions")}
                 className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm sm:text-base ${
@@ -102,6 +119,16 @@ function App() {
               >
                 分析
               </button>
+              <div className="ml-2 flex items-center gap-2">
+                <UserButton />
+                <button
+                  onClick={handleSignOut}
+                  className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
+                  title="登出"
+                >
+                  登出
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -130,16 +157,16 @@ function App() {
                   <div className="space-y-3 max-h-[400px] overflow-y-auto">
                     {transactions.slice(0, 5).map((tx) => (
                       <div
-                        key={tx.id}
+                        key={tx._id}
                         className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">
-                            {tx.category.icon || "💰"}
+                            {tx.category?.icon || "💰"}
                           </span>
                           <div>
                             <p className="font-medium text-gray-800">
-                              {tx.category.name}
+                              {tx.category?.name || "未知"}
                             </p>
                             <p className="text-sm text-gray-500">
                               {new Date(tx.date).toLocaleDateString("zh-CN")}
@@ -164,7 +191,7 @@ function App() {
             </div>
 
             {/* 预算看板 */}
-            <BudgetDashboard key={refreshKey} />
+            <BudgetDashboard />
 
             {/* 所有记录 */}
             {transactions.length > 0 && (
@@ -176,16 +203,16 @@ function App() {
                 <div className="space-y-3">
                   {displayedRecords.map((tx) => (
                     <div
-                      key={tx.id}
+                      key={tx._id}
                       className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition group"
                     >
                       <div className="flex items-center gap-3 flex-1">
                         <span className="text-2xl">
-                          {tx.category.icon || "💰"}
+                          {tx.category?.icon || "💰"}
                         </span>
                         <div className="flex-1">
                           <p className="font-medium text-gray-800">
-                            {tx.category.name}
+                            {tx.category?.name || "未知"}
                           </p>
                           <p className="text-sm text-gray-500">
                             {new Date(tx.date).toLocaleDateString("zh-CN")}
@@ -204,12 +231,12 @@ function App() {
                           {tx.type === "EXPENSE" ? "-" : "+"}¥{tx.amount.toFixed(2)}
                         </span>
                         <button
-                          onClick={() => handleDelete(tx.id)}
-                          disabled={deletingId === tx.id}
+                          onClick={() => handleDelete(tx._id)}
+                          disabled={deletingId === tx._id}
                           className="opacity-0 group-hover:opacity-100 px-2 py-1 text-red-500 hover:bg-red-50 rounded transition disabled:opacity-50"
                           title="删除"
                         >
-                          {deletingId === tx.id ? "..." : "删除"}
+                          {deletingId === tx._id ? "..." : "删除"}
                         </button>
                       </div>
                     </div>
@@ -230,7 +257,7 @@ function App() {
         ) : page === "budget" ? (
           <BudgetSettings />
         ) : (
-          <Analytics key={refreshKey} />
+          <Analytics />
         )}
       </div>
     </div>
