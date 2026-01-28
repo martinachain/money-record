@@ -1,4 +1,4 @@
-const CACHE_NAME = 'money-record-v2';
+const CACHE_NAME = 'money-record-v3-convex';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -24,10 +24,9 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
+          // 清除所有旧缓存（强制更新）
+          console.log('Deleting cache:', cacheName);
+          return caches.delete(cacheName);
         })
       );
     })
