@@ -1,5 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel.js";
 
 /**
  * 获取类别支出占比（饼图数据）
@@ -54,10 +55,17 @@ export const categoryBreakdown = query({
     // 获取类别信息
     const result = await Promise.all(
       Array.from(breakdown.entries()).map(async ([categoryId, value]) => {
-        const category = await ctx.db.get(categoryId as any);
+        const category = await ctx.db.get(categoryId as Id<"categories">);
+        if (!category || !("name" in category)) {
+          return {
+            name: "未知",
+            icon: "",
+            value,
+          };
+        }
         return {
-          name: category?.name || "未知",
-          icon: category?.icon || "",
+          name: category.name || "未知",
+          icon: category.icon || "",
           value,
         };
       })
@@ -118,10 +126,17 @@ export const incomeBreakdown = query({
 
     const result = await Promise.all(
       Array.from(breakdown.entries()).map(async ([categoryId, value]) => {
-        const category = await ctx.db.get(categoryId as any);
+        const category = await ctx.db.get(categoryId as Id<"categories">);
+        if (!category || !("name" in category)) {
+          return {
+            name: "未知",
+            icon: "",
+            value,
+          };
+        }
         return {
-          name: category?.name || "未知",
-          icon: category?.icon || "",
+          name: category.name || "未知",
+          icon: category.icon || "",
           value,
         };
       })
@@ -475,13 +490,13 @@ export const topExpenses = query({
 
     const result = await Promise.all(
       sorted.map(async (tx) => {
-        const category = await ctx.db.get(tx.categoryId);
+        const category = await ctx.db.get(tx.categoryId as Id<"categories">);
         return {
           id: tx._id,
           amount: tx.amount,
           date: new Date(tx.date).toISOString(),
           note: tx.note,
-          category: category
+          category: category && "name" in category
             ? {
                 name: category.name,
                 icon: category.icon,
@@ -542,13 +557,13 @@ export const topIncomes = query({
 
     const result = await Promise.all(
       sorted.map(async (tx) => {
-        const category = await ctx.db.get(tx.categoryId);
+        const category = await ctx.db.get(tx.categoryId as Id<"categories">);
         return {
           id: tx._id,
           amount: tx.amount,
           date: new Date(tx.date).toISOString(),
           note: tx.note,
-          category: category
+          category: category && "name" in category
             ? {
                 name: category.name,
                 icon: category.icon,

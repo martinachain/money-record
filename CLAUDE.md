@@ -2,9 +2,48 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ CRITICAL PROJECT RULES
+
+**This is an INDEPENDENT Convex project named `money-manager-backend-04f8b`.**
+
+### 🚫 STRICTLY FORBIDDEN
+
+1. **NEVER deploy this project's code to:**
+   - ❌ `time-manager` project
+   - ❌ `app` project
+   - ❌ Any other project
+
+2. **NEVER modify files from other projects:**
+   - ❌ Do not modify `time-manager` project files
+   - ❌ Do not modify `app` project files
+
+### ✅ REQUIRED PRACTICES
+
+1. **Convex function modifications:**
+   - ✅ Only modify `convex/schema.ts` in this folder
+   - ✅ Only modify Convex function files in this project
+
+2. **Deployment commands:**
+   - ✅ Before running `npx convex deploy`, MUST verify using `.env.local` in this folder
+   - ✅ Verify `CONVEX_DEPLOYMENT` points to `money-manager-backend-04f8b` project
+   - ✅ Verify deployment target is `lovable-wildebeest-703` (money-manager production)
+
+### 📋 Pre-Deployment Checklist
+
+Before running ANY Convex deployment command:
+
+1. ✅ Confirm current directory is `/Users/martinachain/Desktop/money record/money-record`
+2. ✅ Check `CONVEX_DEPLOYMENT` in `.env.local`
+3. ✅ Verify project name contains `money-manager-backend-04f8b`
+4. ✅ Verify deployment target is NOT `time-manager` or `app` project
+5. ✅ When running `npx convex deploy`, check terminal output for deployment target
+
 ## Project Overview
 
 极简记账 (Money Record) - A personal expense tracking PWA with budget management and analytics.
+
+**Convex Project**: `money-manager-backend-04f8b`
+**Production Deployment**: `lovable-wildebeest-703`
 
 ## Development Commands
 
